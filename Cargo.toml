@@ -1,0 +1,10 @@
+[package]
+name = "rbar"
+version = "0.1.0"
+authors = ["Julian Bieber <j.bieber@patagona.de>"]
+edition = "2018"
+
+[dependencies]
+x11 = "2.18.1"
+chrono = "0.4.6"
+dirs = "1"
