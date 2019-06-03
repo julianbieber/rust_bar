@@ -41,11 +41,7 @@ fn get_current_tasks() -> std::result::Result<String, Box<dyn Error>> {
             }
         }
     }
-    let mut tasks_string = tasks.join(" | ");
-    if !tasks.is_empty(){
-        tasks_string.push(' ');
-    }
-    Ok(tasks_string)
+    Ok( tasks.join(" | "))
 }
 
 fn get_battery_string(battery_manager: &battery::Manager) -> Option<String> {
@@ -62,15 +58,16 @@ fn get_battery_string(battery_manager: &battery::Manager) -> Option<String> {
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let battery_manager = battery::Manager::new()?;
     loop {
+
+        let bar = vec![
+            get_battery_string(&battery_manager),
+            Some(idle_time()),
+            get_current_tasks().ok(),
+            Some(time_string())
+        ].into_iter().flatten().collect::<Vec<String>>().join(" | ");
         Command::new("xsetroot")
             .arg("-name")
-            .arg(format!(
-                " {} | {} | {}{}",
-                get_battery_string(&battery_manager).unwrap_or_else(||{String::new()}),
-                idle_time(),
-                get_current_tasks()?,
-                time_string()
-            ))
+            .arg(bar)
             .output()
             .expect("");
         sleep(Duration::new(1, 0));
