@@ -1,8 +1,9 @@
 extern crate chrono;
 extern crate battery;
 mod config;
+mod percentage_clock;
 
-use chrono::Local;
+use chrono::{Local, DateTime, Timelike, Utc};
 
 use std::error::Error;
 use std::fs::{read_dir, OpenOptions};
@@ -10,24 +11,11 @@ use std::io::{BufRead, BufReader};
 use std::process::Command;
 use std::str;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn time_string() -> String {
     let now = Local::now();
     format!("{}", now.format("(%H:%M) (%d-%m-%Y)"))
-}
-
-fn idle_time() -> String {
-    let mut string = str::from_utf8(
-        &Command::new("xssstate").arg("-i")
-            .output()
-            .expect("Failed to run xssstste")
-            .stdout,
-    )
-    .expect("Could not parse the output of getIdle")
-    .to_string();
-    let _ = string.pop();
-    format!("{}", string.parse::<u32>().expect("Failed to parse idle state") / 60000)
 }
 
 fn get_current_tasks() -> std::result::Result<String, Box<dyn Error>> {
@@ -48,7 +36,7 @@ fn get_battery_string(battery_manager: &battery::Manager) -> Option<String> {
     battery_manager.batteries().ok().and_then(|mut batteries| {
         batteries.next().and_then(|battery_opt| {
             match battery_opt {
-                Ok(battery) => Some(format!("{:.2}", f32::from(battery.state_of_charge()))),
+                Ok(battery) => Some(format!("battery: {:.2}", f32::from(battery.state_of_charge()))),
                 _ => None
             }
         })
@@ -58,10 +46,42 @@ fn get_battery_string(battery_manager: &battery::Manager) -> Option<String> {
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let battery_manager = battery::Manager::new()?;
     loop {
+        let morning = Utc::now()
+            .with_hour(10)
+            .map(|d| d.with_minute(0)).flatten()
+            .map(|d| d.with_second(0)).flatten()
+            .map(|d| d.with_nanosecond(0)).flatten();
+
+        let evening = Utc::now()
+            .with_hour(18)
+            .map(|d| d.with_minute(0)).flatten()
+            .map(|d| d.with_second(0)).flatten()
+            .map(|d| d.with_nanosecond(0)).flatten();
+
+        let night = Utc::now()
+            .with_hour(23)
+            .map(|d| d.with_minute(59)).flatten()
+            .map(|d| d.with_second(0)).flatten()
+            .map(|d| d.with_nanosecond(0)).flatten();
+
+        let work_clock = match (&morning, &evening) {
+            (Some(start), Some(end)) => {
+                Some(format!("work: {:.2} ", percentage_clock::get_current_percent_between(start, end)))
+            },
+            _ => None
+        };
+
+        let wake_clock = match (&morning, &night) {
+            (Some(start), Some(end)) => {
+                Some(format!("wake: {:.2} ", percentage_clock::get_current_percent_between(start, end)))
+            },
+            _ => None
+        };
 
         let bar = vec![
             get_battery_string(&battery_manager),
-            Some(idle_time()),
+            work_clock,
+            wake_clock,
             get_current_tasks().ok(),
             Some(time_string())
         ].into_iter().flatten().collect::<Vec<String>>().join(" | ");
